@@ -1,26 +1,14 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * O Fin Family usa um tema claro fixo (classes Tailwind explícitas em
+ * cada página), sem suporte a modo escuro do sistema. Por isso nenhuma
+ * variável de tema baseada em prefers-color-scheme é definida aqui —
+ * isso evitava que o fundo da página ficasse escuro enquanto o texto
+ * continuava escuro, tornando o conteúdo ilegível no modo escuro do SO.
+ */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
