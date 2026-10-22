@@ -32,6 +32,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_Mf-B1T_bcQzekvwmjOSYBA_UzSqFlr-"
           DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.DATABASE || secrets.DB_URL || secrets.SUPABASE_DB_URL }}
         run: |
+          set -o pipefail
           if [ -z "$VERCEL_TOKEN" ]; then
             echo "::error::Não encontrei o token da Vercel em nenhum secret esperado (VERCEL_TOKEN ou FINFAMILY)."
             exit 1
