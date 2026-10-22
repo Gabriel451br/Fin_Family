@@ -55,13 +55,37 @@ e entra automaticamente na mesma família, vendo a mesma tela que você.
 
 ## Deploy gratuito (Vercel)
 
-1. Suba este repositório no GitHub (já está em
-   `gabriel451br/fin_family`).
-2. Crie uma conta gratuita em [vercel.com](https://vercel.com) e importe o
-   repositório.
-3. Em **Environment Variables**, adicione as três variáveis do
+### Opção A — automático via GitHub Actions (já configurado)
+
+Este repositório já tem um workflow (`.github/workflows/deploy.yml`) que
+publica no Vercel sozinho a cada push nesta branch, sem precisar abrir o
+site da Vercel. Só falta configurar 2 segredos no GitHub, uma única vez:
+
+1. Crie um token em
+   [vercel.com/account/tokens](https://vercel.com/account/tokens) (conta
+   gratuita).
+2. No GitHub, vá em **Settings → Secrets and variables → Actions** do
+   repositório e adicione:
+   - `VERCEL_TOKEN`: o token do passo 1.
+   - `DATABASE_URL`: a connection string do Postgres com a senha real
+     (Supabase → Project Settings → Database → Connection string →
+     Transaction pooler).
+3. Dispare o workflow: faça um novo commit/push nesta branch, ou vá em
+   **Actions → Deploy to Vercel → Run workflow**.
+4. Acompanhe em **Actions**: ao final, o link publicado aparece no resumo
+   da execução ("Show deployment URL").
+
+Na primeira execução o workflow cria o projeto na Vercel automaticamente
+(sem precisar passar pelo dashboard); as próximas execuções atualizam o
+mesmo projeto.
+
+### Opção B — manual pelo site da Vercel
+
+1. Crie uma conta gratuita em [vercel.com](https://vercel.com) e importe o
+   repositório `gabriel451br/fin_family`.
+2. Em **Environment Variables**, adicione as três variáveis do
    `.env.local` (incluindo a `DATABASE_URL` com a senha real).
-4. Deploy. O Vercel te dá uma URL pública (ex:
+3. Deploy. O Vercel te dá uma URL pública (ex:
    `https://fin-family.vercel.app`) acessível de qualquer navegador — PC ou
    celular, dentro ou fora de casa.
 
