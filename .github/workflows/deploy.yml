@@ -24,17 +24,20 @@ jobs:
 
       - name: Deploy to Vercel (production)
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # Aceita o nome oficial (VERCEL_TOKEN) ou o nome que já foi
+          # cadastrado no repositório (FINFAMILY), para não depender de
+          # renomear o secret.
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN || secrets.FINFAMILY }}
           NEXT_PUBLIC_SUPABASE_URL: "https://pmezjrfauulpildtjxxe.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_Mf-B1T_bcQzekvwmjOSYBA_UzSqFlr-"
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.DATABASE || secrets.DB_URL || secrets.SUPABASE_DB_URL }}
         run: |
           if [ -z "$VERCEL_TOKEN" ]; then
-            echo "::error::Faltou configurar o secret VERCEL_TOKEN no repositório (Settings > Secrets and variables > Actions)."
+            echo "::error::Não encontrei o token da Vercel em nenhum secret esperado (VERCEL_TOKEN ou FINFAMILY)."
             exit 1
           fi
           if [ -z "$DATABASE_URL" ]; then
-            echo "::error::Faltou configurar o secret DATABASE_URL no repositório (Settings > Secrets and variables > Actions)."
+            echo "::error::Não encontrei a DATABASE_URL em nenhum secret esperado (DATABASE_URL, DATABASE, DB_URL ou SUPABASE_DB_URL). Diga-me o nome exato que você usou."
             exit 1
           fi
           vercel deploy --prod --yes \
