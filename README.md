@@ -5,6 +5,8 @@ recorrências, orçamentos e metas — compartilhado entre os membros da
 família com permissões por pessoa. Funciona no navegador, tanto no
 computador quanto no celular.
 
+**App no ar:** https://fin-family-app-theta.vercel.app
+
 ## Arquitetura
 
 - **Next.js 15** (App Router, Server Actions) — um único app web responsivo,
@@ -17,7 +19,11 @@ computador quanto no celular.
   isolado das tabelas desse outro app (schema `public`). O app se conecta
   diretamente ao Postgres (não via REST do Supabase) usando a
   `DATABASE_URL`, então o schema `fin_family` não precisa ser exposto na API
-  do Supabase.
+  do Supabase. A conexão usa uma role dedicada (`fin_family_app`) com
+  permissão **apenas** no schema `fin_family` — ela não enxerga nenhuma
+  tabela do CFO IA.
+- **Vercel** — hospedagem, com deploy automático a cada push nesta branch
+  (projeto `fin-family-app`, ligado ao GitHub).
 - Toda a autorização (quem pode ver/editar o quê) é verificada no servidor,
   nas Server Actions, a partir das permissões de cada membro da família
   (tabela `fin_family.family_members`).
@@ -32,10 +38,17 @@ computador quanto no celular.
 
 2. As variáveis `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    já vêm preenchidas (projeto `cfo-ia`, usado também para o Fin Family).
-3. Preencha `DATABASE_URL` com a senha real do banco: no painel do Supabase,
-   vá em **Project Settings → Database → Connection string** e use o modo
-   **Transaction pooler** (porta 6543). Substitua `[YOUR-PASSWORD]` pela
-   senha do banco.
+3. Preencha `DATABASE_URL` com a senha real do banco.
+
+   **Importante:** use o modo **Transaction pooler** (porta 6543), nunca a
+   conexão direta (`db.<ref>.supabase.co`) — ela só tem endereço IPv6 e não
+   funciona a partir da Vercel. E **copie o host exato do painel do
+   Supabase** (Project Settings → Database → Connection string →
+   Transaction pooler); não "componha" o host assumindo `aws-0-<região>` —
+   cada projeto é atribuído a um cluster específico do pooler (pode ser
+   `aws-0`, `aws-1`, etc.), e usar o errado falha com
+   `tenant/user ... not found`. Para este projeto (`pmezjrfauulpildtjxxe`,
+   região `sa-east-1`), o host correto é `aws-1-sa-east-1.pooler.supabase.com`.
 
 ## Rodando localmente
 
@@ -53,41 +66,23 @@ sua esposa/marido por email — isso gera um link de convite que você envia
 por WhatsApp ou email; ao abrir o link ela/ele cria a conta (ou faz login)
 e entra automaticamente na mesma família, vendo a mesma tela que você.
 
-## Deploy gratuito (Vercel)
+## Deploy (Vercel)
 
-### Opção A — automático via GitHub Actions (já configurado)
+O app já está publicado e conectado ao GitHub: todo push nesta branch
+dispara um novo deploy automaticamente, sem passos manuais. As variáveis de
+ambiente ficam configuradas direto no projeto Vercel (`fin-family-app`).
 
-Este repositório já tem um workflow (`.github/workflows/deploy.yml`) que
-publica no Vercel sozinho a cada push nesta branch, sem precisar abrir o
-site da Vercel. Só falta configurar 2 segredos no GitHub, uma única vez:
-
-1. Crie um token em
-   [vercel.com/account/tokens](https://vercel.com/account/tokens) (conta
-   gratuita).
-2. No GitHub, vá em **Settings → Secrets and variables → Actions** do
-   repositório e adicione:
-   - `VERCEL_TOKEN`: o token do passo 1.
-   - `DATABASE_URL`: a connection string do Postgres com a senha real
-     (Supabase → Project Settings → Database → Connection string →
-     Transaction pooler).
-3. Dispare o workflow: faça um novo commit/push nesta branch, ou vá em
-   **Actions → Deploy to Vercel → Run workflow**.
-4. Acompanhe em **Actions**: ao final, o link publicado aparece no resumo
-   da execução ("Show deployment URL").
-
-Na primeira execução o workflow cria o projeto na Vercel automaticamente
-(sem precisar passar pelo dashboard); as próximas execuções atualizam o
-mesmo projeto.
-
-### Opção B — manual pelo site da Vercel
+Se precisar recriar o projeto do zero (por exemplo em outra conta):
 
 1. Crie uma conta gratuita em [vercel.com](https://vercel.com) e importe o
-   repositório `gabriel451br/fin_family`.
+   repositório `Gabriel451br/Fin_Family`.
 2. Em **Environment Variables**, adicione as três variáveis do
-   `.env.local` (incluindo a `DATABASE_URL` com a senha real).
-3. Deploy. O Vercel te dá uma URL pública (ex:
-   `https://fin-family.vercel.app`) acessível de qualquer navegador — PC ou
-   celular, dentro ou fora de casa.
+   `.env.local` (veja a seção **Configuração** acima sobre a `DATABASE_URL`).
+3. Em **Settings → Deployment Protection**, desative a "Vercel
+   Authentication" (SSO) para o domínio público — senão só quem tem conta
+   na mesma equipe Vercel consegue abrir o site.
+4. Deploy. O Vercel dá uma URL pública acessível de qualquer navegador —
+   PC ou celular, dentro ou fora de casa.
 
 ## Funcionalidades
 
