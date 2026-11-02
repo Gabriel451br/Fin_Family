@@ -2,76 +2,95 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCurrentMember } from "@/lib/auth";
-import { requirePermission, PermissionError } from "@/lib/permissions";
-import { createCategory, updateCategory, setCategoryArchived } from "@/lib/data/categories";
-import type { CategoryKind } from "@/lib/types";
+import { requirePermission } from "@/lib/permissions";
+import { actionError, type ActionResult } from "@/lib/action-result";
+import {
+  createCategory,
+  listCategories,
+  setCategoryArchived,
+  updateCategory,
+} from "@/lib/data/categories";
+import { CATEGORY_COLORS } from "@/lib/constants";
+import type { Category } from "@/lib/types";
 
-export interface CategoryFormState {
-  error?: string;
+type Kind = "expense" | "income";
+
+function refresh() {
+  revalidatePath("/categories");
+  revalidatePath("/transactions");
+  revalidatePath("/budgets");
+  revalidatePath("/dashboard");
 }
 
 export async function createCategoryAction(
-  _prevState: CategoryFormState,
-  formData: FormData,
-): Promise<CategoryFormState> {
+  kind: Kind,
+  name: string,
+): Promise<ActionResult & { category?: Pick<Category, "id" | "name" | "color" | "kind"> }> {
   const { user, member } = await requireCurrentMember();
   try {
     requirePermission(member, "manage_categories");
-    const name = String(formData.get("name") ?? "").trim();
-    const kind = String(formData.get("kind") ?? "expense") as CategoryKind;
-    const color = String(formData.get("color") ?? "#64748b");
-    const parentId = String(formData.get("parent_id") ?? "") || null;
-    if (!name) throw new Error("Informe o nome da categoria.");
+    if (kind !== "expense" && kind !== "income") throw new Error("Tipo inválido.");
+    const clean = name.trim();
+    if (!clean) throw new Error("Informe o nome.");
+    if (clean.length > 40) throw new Error("Nome muito longo (máx. 40 letras).");
 
-    await createCategory({
+    const color = CATEGORY_COLORS[Math.floor(Math.random() * CATEGORY_COLORS.length)];
+    const created = await createCategory({
       familyId: member.family_id,
-      name,
+      name: clean,
       kind,
       color,
       icon: "tag",
-      parentId,
       createdBy: user.id,
     });
+    refresh();
+    return {
+      ok: true,
+      category: { id: created.id, name: created.name, color: created.color, kind: created.kind },
+    };
   } catch (err) {
-    return { error: errorMessage(err) };
+    return actionError(err);
   }
-  revalidatePath("/categories");
-  return {};
 }
 
-export async function updateCategoryAction(
-  categoryId: string,
-  _prevState: CategoryFormState,
-  formData: FormData,
-): Promise<CategoryFormState> {
+export async function renameCategoryAction(
+  id: string,
+  name: string,
+): Promise<ActionResult> {
   const { member } = await requireCurrentMember();
   try {
     requirePermission(member, "manage_categories");
-    const name = String(formData.get("name") ?? "").trim();
-    const color = String(formData.get("color") ?? "#64748b");
-    const parentId = String(formData.get("parent_id") ?? "") || null;
-    if (!name) throw new Error("Informe o nome da categoria.");
-
-    await updateCategory(member.family_id, categoryId, { name, color, icon: "tag", parentId });
+    const clean = name.trim();
+    if (!clean) throw new Error("Informe o nome.");
+    if (clean.length > 40) throw new Error("Nome muito longo (máx. 40 letras).");
+    const category = (
+      await listCategories(member.family_id, { includeArchived: true })
+    ).find((c) => c.id === id);
+    if (!category) throw new Error("Categoria não encontrada.");
+    await updateCategory(member.family_id, id, {
+      name: clean,
+      color: category.color,
+      icon: category.icon,
+      parentId: category.parent_id,
+    });
   } catch (err) {
-    return { error: errorMessage(err) };
+    return actionError(err);
   }
-  revalidatePath("/categories");
-  return {};
+  refresh();
+  return { ok: true };
 }
 
-export async function toggleCategoryArchivedAction(
-  categoryId: string,
+export async function archiveCategoryAction(
+  id: string,
   archived: boolean,
-) {
+): Promise<ActionResult> {
   const { member } = await requireCurrentMember();
-  requirePermission(member, "manage_categories");
-  await setCategoryArchived(member.family_id, categoryId, archived);
-  revalidatePath("/categories");
-}
-
-function errorMessage(err: unknown) {
-  if (err instanceof PermissionError) return err.message;
-  if (err instanceof Error) return err.message;
-  return "Erro inesperado.";
+  try {
+    requirePermission(member, "manage_categories");
+    await setCategoryArchived(member.family_id, id, archived);
+  } catch (err) {
+    return actionError(err);
+  }
+  refresh();
+  return { ok: true };
 }

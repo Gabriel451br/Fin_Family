@@ -130,7 +130,9 @@ function MemberRow({
             </Select>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            {(Object.keys(PERMISSION_LABELS) as Array<keyof Permissions>).map((key) => (
+            {(Object.keys(PERMISSION_LABELS) as Array<keyof Permissions>)
+              .filter((key) => key !== "manage_accounts" && key !== "view_reports")
+              .map((key) => (
               <label key={key} className="flex items-center gap-2 text-sm text-slate-700">
                 <input
                   type="checkbox"

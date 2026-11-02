@@ -1,60 +1,52 @@
 import { sql } from "@/lib/db/client";
-import type { Budget, CategoryKind } from "@/lib/types";
+import type { BudgetLimit } from "@/lib/finance";
 
-export interface BudgetWithCategory extends Budget {
-  category_name: string;
-  category_color: string;
-}
-
-export async function listBudgetsForMonth(
+/**
+ * Orçamento vigente em um mês: para cada categoria de despesa vale o último
+ * limite definido até aquele mês (limite 0 = sem orçamento).
+ */
+export async function getBudgetLimits(
   familyId: string,
   monthStart: string,
-): Promise<BudgetWithCategory[]> {
-  return sql<BudgetWithCategory[]>`
-    select b.*, c.name as category_name, c.color as category_color
+): Promise<BudgetLimit[]> {
+  const rows = await sql<
+    { category_id: string; name: string; amount_limit: number }[]
+  >`
+    select distinct on (b.category_id)
+      b.category_id, c.name, b.amount_limit::float8 as amount_limit
     from fin_family.budgets b
     join fin_family.categories c on c.id = b.category_id
-    where b.family_id = ${familyId} and b.period_month = ${monthStart}::date
-    order by c.name asc
+    where b.family_id = ${familyId}
+      and b.period_month <= ${monthStart}::date
+      and c.kind = 'expense'
+      and c.is_archived = false
+    order by b.category_id, b.period_month desc
   `;
+  return rows
+    .map((r) => ({
+      categoryId: r.category_id,
+      name: r.name,
+      limit: Number(r.amount_limit),
+    }))
+    .filter((r) => r.limit > 0);
 }
 
-export async function upsertBudget(data: {
-  familyId: string;
-  categoryId: string;
-  kind: CategoryKind;
-  amountLimit: number;
-  periodMonth: string;
-  createdBy: string;
-}) {
-  const [budget] = await sql<Budget[]>`
-    insert into fin_family.budgets (family_id, category_id, kind, amount_limit, period_month, created_by)
-    values (${data.familyId}, ${data.categoryId}, ${data.kind}, ${data.amountLimit}, ${data.periodMonth}::date, ${data.createdBy})
-    on conflict (family_id, category_id, period_month)
-    do update set amount_limit = excluded.amount_limit
-    returning *
-  `;
-  return budget;
-}
-
-export async function deleteBudget(familyId: string, budgetId: string) {
-  await sql`
-    delete from fin_family.budgets
-    where family_id = ${familyId} and id = ${budgetId}
-  `;
-}
-
-export async function copyBudgetsFromPreviousMonth(
+/** Salva os limites a partir do mês informado (vale até ser alterado de novo). */
+export async function saveBudgetLimits(
   familyId: string,
-  fromMonth: string,
-  toMonth: string,
   createdBy: string,
+  monthStart: string,
+  limits: Array<{ categoryId: string; limit: number }>,
 ) {
-  await sql`
-    insert into fin_family.budgets (family_id, category_id, kind, amount_limit, period_month, created_by)
-    select family_id, category_id, kind, amount_limit, ${toMonth}::date, ${createdBy}
-    from fin_family.budgets
-    where family_id = ${familyId} and period_month = ${fromMonth}::date
-    on conflict (family_id, category_id, period_month) do nothing
-  `;
+  await sql.begin(async (tx) => {
+    for (const { categoryId, limit } of limits) {
+      await tx`
+        insert into fin_family.budgets
+          (family_id, category_id, kind, amount_limit, period_month, created_by)
+        values (${familyId}, ${categoryId}, 'expense', ${limit}, ${monthStart}::date, ${createdBy})
+        on conflict (family_id, category_id, period_month)
+        do update set amount_limit = excluded.amount_limit
+      `;
+    }
+  });
 }

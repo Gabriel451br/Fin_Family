@@ -1,13 +1,5 @@
 export type MemberRole = "owner" | "admin" | "member" | "viewer";
 
-export type AccountType =
-  | "checking"
-  | "savings"
-  | "investment"
-  | "credit_card"
-  | "cash"
-  | "other";
-
 export type CategoryKind = "expense" | "income" | "investment";
 
 export type TransactionType = "expense" | "income" | "investment" | "transfer";
@@ -15,15 +7,6 @@ export type TransactionType = "expense" | "income" | "investment" | "transfer";
 export type TransactionStatus = "confirmed" | "pending" | "projected";
 
 export type TransactionSource = "manual" | "recurring" | "import" | "open_finance";
-
-export type RecurrenceFrequency = "weekly" | "monthly" | "yearly";
-
-export type GoalKind =
-  | "expense_limit"
-  | "income_target"
-  | "investment_target"
-  | "savings_target"
-  | "custom";
 
 export type InviteStatus = "pending" | "accepted" | "revoked" | "expired";
 
@@ -119,21 +102,6 @@ export interface Invite {
   accepted_at: string | null;
 }
 
-export interface Account {
-  id: string;
-  family_id: string;
-  name: string;
-  type: AccountType;
-  institution: string | null;
-  initial_balance: string;
-  color: string;
-  icon: string;
-  is_archived: boolean;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface Category {
   id: string;
   family_id: string;
@@ -145,24 +113,6 @@ export interface Category {
   is_default: boolean;
   is_archived: boolean;
   created_by: string | null;
-  created_at: string;
-}
-
-export interface RecurringRule {
-  id: string;
-  family_id: string;
-  account_id: string | null;
-  category_id: string | null;
-  description: string;
-  amount: string;
-  type: TransactionType;
-  frequency: RecurrenceFrequency;
-  interval_count: number;
-  day_of_month: number | null;
-  start_date: string;
-  end_date: string | null;
-  is_active: boolean;
-  created_by: string;
   created_at: string;
 }
 
@@ -186,30 +136,4 @@ export interface Transaction {
   created_by: string;
   created_at: string;
   updated_at: string;
-}
-
-export interface Budget {
-  id: string;
-  family_id: string;
-  category_id: string;
-  kind: CategoryKind;
-  amount_limit: string;
-  period_month: string;
-  is_template: boolean;
-  created_by: string;
-  created_at: string;
-}
-
-export interface Goal {
-  id: string;
-  family_id: string;
-  category_id: string | null;
-  name: string;
-  kind: GoalKind;
-  target_amount: string;
-  target_date: string | null;
-  is_active: boolean;
-  notes: string | null;
-  created_by: string;
-  created_at: string;
 }

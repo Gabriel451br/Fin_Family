@@ -1,9 +1,9 @@
 # Fin Family
 
-Controle financeiro da família: receitas, despesas, investimentos, parcelas,
-recorrências, orçamentos e metas — compartilhado entre os membros da
-família com permissões por pessoa. Funciona no navegador, tanto no
-computador quanto no celular.
+Controle financeiro simples da família: receitas e despesas fixas, lançamentos
+variáveis com lista personalizada de categorias, painel com gráficos e
+orçamento com projeção do mês — compartilhado entre os membros da família.
+Funciona no navegador e pode ser instalado na tela inicial do iPhone.
 
 **App no ar:** https://fin-family-app-theta.vercel.app
 
@@ -84,31 +84,39 @@ Se precisar recriar o projeto do zero (por exemplo em outra conta):
 4. Deploy. O Vercel dá uma URL pública acessível de qualquer navegador —
    PC ou celular, dentro ou fora de casa.
 
-## Funcionalidades
+## Como o app funciona
 
-- **Família conjunta**: um login por pessoa, todos veem a mesma conta
-  familiar. Papéis (proprietário, administrador, membro, visualizador) com
-  permissões granulares e personalizáveis por membro (quem pode lançar,
-  editar transações de outros, gerenciar contas/categorias, orçamentos e
-  metas, convidar gente nova).
-- **Contas**: corrente, poupança, investimento, cartão de crédito, dinheiro
-  — cada uma com saldo calculado automaticamente a partir das transações.
-- **Categorias**: totalmente personalizáveis, com subcategorias, por tipo
-  (despesa, receita, investimento). Vem com um conjunto padrão pré-criado.
-- **Transações**: lançamento manual de receitas, despesas, investimentos e
-  transferências, com parcelamento automático (divide o valor em N meses).
-- **Recorrentes**: despesas/receitas fixas (aluguel, assinaturas, salário)
-  com frequência semanal/mensal/anual; a tela mostra os próximos
-  lançamentos esperados e permite confirmar cada ocorrência com um clique
-  quando ela realmente acontecer.
-- **Orçamentos**: limite mensal por categoria, com barra de progresso
-  comparando ao gasto real; é possível copiar os orçamentos do mês
-  anterior.
-- **Metas**: de renda, gasto, investimento ou economia, com valor e prazo
-  alvo, progresso calculado automaticamente a partir das transações.
-- **Painel**: visão geral do mês — patrimônio, receitas/despesas/
-  investimentos, orçamentos, metas, próximos lançamentos e últimas
-  transações.
+Cinco telas, pensadas para o celular:
+
+- **Painel** — o que já aconteceu no mês: saldo, receitas e despesas (números),
+  gráfico dos últimos 6 meses e para onde foi o dinheiro por categoria. Logo
+  abaixo, **Orçamento e projeção do mês**: quanto falta de cada orçamento e o
+  saldo previsto para o fim do mês.
+- **Lançar** — receitas e despesas variáveis (mercado, restaurante, farmácia…):
+  valor, toque na categoria da sua **lista personalizada**, pronto. Dá para
+  criar categorias na hora (botão "Nova").
+- **Fixos** — receitas e despesas que se repetem todo mês no mesmo dia
+  (salário, aluguel, escola…). Cadastre uma vez; entram sozinhas no Painel a
+  partir do dia do vencimento.
+- **Orçamento** — limite mensal por categoria de despesa, com a projeção do mês.
+  O limite vale a partir do mês atual e se repete até ser alterado.
+- **Mais** — categorias (a lista personalizada), família (convites e
+  permissões) e configurações.
+
+**Contas do Painel:** realizado = lançamentos variáveis + fixos já vencidos.
+Projeção = fixos do mês inteiro + variáveis já lançados + o que ainda resta de
+cada orçamento (assume que cada categoria com orçamento será usada até o
+limite; categorias sem orçamento entram só com o que já foi gasto).
+
+**Família conjunta:** um login por pessoa, todos veem os mesmos dados. Papéis
+(proprietário, administrador, membro, visualizador) com permissões ajustáveis
+por pessoa. Datas e "hoje" usam o fuso de Brasília.
+
+## Instalar no iPhone
+
+Abra o endereço do app no **Safari** → botão de compartilhar → **Adicionar à Tela
+de Início**. O app abre em tela cheia com o ícone da casa com gráfico (arquivo
+`src/app/apple-icon.png`; o manifesto está em `src/app/manifest.ts`).
 
 ## Integração com banco / Open Finance
 

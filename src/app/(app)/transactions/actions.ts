@@ -2,117 +2,100 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCurrentMember } from "@/lib/auth";
-import { requirePermission, canEditTransaction, PermissionError } from "@/lib/permissions";
+import {
+  canEditTransaction,
+  PermissionError,
+  requirePermission,
+} from "@/lib/permissions";
+import { actionError, type ActionResult } from "@/lib/action-result";
+import { parseMoney } from "@/lib/format";
+import { listCategories } from "@/lib/data/categories";
+import { getMemberById } from "@/lib/data/members";
 import {
   createTransaction,
-  updateTransaction,
   deleteTransaction,
-  deleteInstallmentGroup,
   getTransactionById,
+  updateTransaction,
+  type TransactionInput,
 } from "@/lib/data/transactions";
-import type { TransactionType } from "@/lib/types";
+import type { FlowType } from "@/lib/finance";
 
-export interface TransactionFormState {
-  error?: string;
+function refresh() {
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath("/budgets");
 }
 
-function parseForm(formData: FormData) {
-  const type = String(formData.get("type") ?? "expense") as TransactionType;
-  const description = String(formData.get("description") ?? "").trim();
-  const amount = Number(String(formData.get("amount") ?? "0").replace(",", "."));
-  const date = String(formData.get("date") ?? "");
-  const accountId = String(formData.get("account_id") ?? "") || null;
-  const categoryId = String(formData.get("category_id") ?? "") || null;
-  const memberId = String(formData.get("member_id") ?? "") || null;
-  const notes = String(formData.get("notes") ?? "").trim() || null;
-  const installments = Number(formData.get("installments") ?? "1") || 1;
-
-  if (!description) throw new Error("Informe uma descrição.");
-  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Valor inválido.");
-  if (!date) throw new Error("Informe a data.");
-
-  return { type, description, amount, date, accountId, categoryId, memberId, notes, installments };
-}
-
-export async function createTransactionAction(
-  _prevState: TransactionFormState,
+export async function saveTransactionAction(
+  id: string | null,
   formData: FormData,
-): Promise<TransactionFormState> {
+): Promise<ActionResult> {
   const { user, member } = await requireCurrentMember();
   try {
-    requirePermission(member, "add_transactions");
-    const data = parseForm(formData);
-    await createTransaction({
-      familyId: member.family_id,
-      accountId: data.accountId,
-      categoryId: data.categoryId,
-      memberId: data.memberId ?? member.id,
-      type: data.type,
-      description: data.description,
-      amount: data.amount,
-      date: data.date,
-      notes: data.notes,
-      createdBy: user.id,
-      installments: data.installments,
-    });
+    const type = String(formData.get("type")) as FlowType;
+    if (type !== "income" && type !== "expense") throw new Error("Tipo inválido.");
+
+    const amount = parseMoney(String(formData.get("amount") ?? ""));
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Informe um valor maior que zero.");
+
+    const date = String(formData.get("date") ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Informe a data.");
+
+    const categoryId = String(formData.get("category_id") ?? "") || null;
+    let categoryName: string | null = null;
+    if (categoryId) {
+      const categories = await listCategories(member.family_id);
+      const category = categories.find((c) => c.id === categoryId && c.kind === type);
+      if (!category) throw new Error("Categoria inválida.");
+      categoryName = category.name;
+    }
+
+    let memberId = member.id;
+    const requestedMember = String(formData.get("member_id") ?? "");
+    if (requestedMember && requestedMember !== member.id) {
+      const other = await getMemberById(member.family_id, requestedMember);
+      if (!other) throw new Error("Membro inválido.");
+      memberId = other.id;
+    }
+
+    const input: TransactionInput = {
+      type,
+      amount,
+      date,
+      categoryId,
+      memberId,
+      description:
+        String(formData.get("description") ?? "").trim() ||
+        categoryName ||
+        (type === "income" ? "Receita" : "Despesa"),
+    };
+
+    if (id) {
+      const existing = await getTransactionById(member.family_id, id);
+      if (!existing) throw new Error("Lançamento não encontrado.");
+      if (!canEditTransaction(member, existing.member_id)) throw new PermissionError();
+      await updateTransaction(member.family_id, id, input);
+    } else {
+      requirePermission(member, "add_transactions");
+      await createTransaction(member.family_id, user.id, input);
+    }
   } catch (err) {
-    return { error: errorMessage(err) };
+    return actionError(err);
   }
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
-  return {};
+  refresh();
+  return { ok: true };
 }
 
-export async function updateTransactionAction(
-  transactionId: string,
-  _prevState: TransactionFormState,
-  formData: FormData,
-): Promise<TransactionFormState> {
+export async function deleteTransactionAction(id: string): Promise<ActionResult> {
   const { member } = await requireCurrentMember();
   try {
-    const existing = await getTransactionById(member.family_id, transactionId);
-    if (!existing) throw new Error("Transação não encontrada.");
+    const existing = await getTransactionById(member.family_id, id);
+    if (!existing) return { ok: true };
     if (!canEditTransaction(member, existing.member_id)) throw new PermissionError();
-
-    const data = parseForm(formData);
-    await updateTransaction(member.family_id, transactionId, {
-      accountId: data.accountId,
-      categoryId: data.categoryId,
-      memberId: data.memberId ?? member.id,
-      type: data.type,
-      description: data.description,
-      amount: data.amount,
-      date: data.date,
-      notes: data.notes,
-    });
+    await deleteTransaction(member.family_id, id);
   } catch (err) {
-    return { error: errorMessage(err) };
+    return actionError(err);
   }
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
-  return {};
-}
-
-export async function deleteTransactionAction(transactionId: string) {
-  const { member } = await requireCurrentMember();
-  const existing = await getTransactionById(member.family_id, transactionId);
-  if (!existing) return;
-  if (!canEditTransaction(member, existing.member_id)) throw new PermissionError();
-  await deleteTransaction(member.family_id, transactionId);
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
-}
-
-export async function deleteInstallmentGroupAction(groupId: string) {
-  const { member } = await requireCurrentMember();
-  requirePermission(member, "edit_all_transactions");
-  await deleteInstallmentGroup(member.family_id, groupId);
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
-}
-
-function errorMessage(err: unknown) {
-  if (err instanceof PermissionError) return err.message;
-  if (err instanceof Error) return err.message;
-  return "Erro inesperado.";
+  refresh();
+  return { ok: true };
 }

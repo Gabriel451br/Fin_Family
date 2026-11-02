@@ -11,12 +11,12 @@ export class PermissionError extends Error {
 export const PERMISSION_LABELS: Record<keyof Permissions, string> = {
   manage_members: "Gerenciar membros e convites",
   manage_accounts: "Gerenciar contas",
-  manage_categories: "Gerenciar categorias",
-  add_transactions: "Lançar transações",
+  manage_categories: "Alterar a lista de categorias",
+  add_transactions: "Lançar receitas e despesas",
   edit_all_transactions: "Editar transações de qualquer membro",
   edit_own_transactions: "Editar as próprias transações",
-  manage_budgets_goals: "Gerenciar orçamentos e metas",
-  view_reports: "Ver relatórios e dashboard",
+  manage_budgets_goals: "Alterar itens fixos e orçamento",
+  view_reports: "Ver o painel",
 };
 
 export function hasPermission(
