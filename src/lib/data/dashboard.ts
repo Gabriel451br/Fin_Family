@@ -7,11 +7,15 @@ import {
 import {
   buildBudgetRows,
   buildProjection,
+  buildBills,
   fixedTotals,
+  summarizeBills,
+  type BillSummary,
   type BudgetRow,
   type Projection,
 } from "@/lib/finance";
 import { listFixedItems } from "@/lib/data/fixed";
+import { listPayments } from "@/lib/data/payments";
 import { getBudgetLimits } from "@/lib/data/budgets";
 import {
   getExpenseByCategory,
@@ -41,6 +45,7 @@ export interface DashboardData {
   budgetTotals: { limit: number; spent: number };
   projection: Projection;
   daysLeft: number;
+  bills: BillSummary & { nextDue: { name: string; amount: number; dueDate: string } | null };
 }
 
 const MAX_SLICES = 6;
@@ -53,8 +58,9 @@ export async function getDashboardData(
   const currentMonth = currentMonthStartISO();
   const seriesStart = addMonthsISO(monthStart, -5);
 
-  const [fixedItems, monthlyVariable, byCategory, limits] = await Promise.all([
+  const [fixedItems, payments, monthlyVariable, byCategory, limits] = await Promise.all([
     listFixedItems(familyId),
+    listPayments(familyId, seriesStart, monthStart),
     getMonthlyVariableTotals(familyId, seriesStart, monthStart),
     getExpenseByCategory(familyId, monthStart),
     getBudgetLimits(familyId, monthStart),
@@ -64,7 +70,7 @@ export async function getDashboardData(
   for (let i = 0; i < 6; i++) {
     const month = addMonthsISO(seriesStart, i);
     const variable = monthlyVariable[month] ?? { income: 0, expense: 0 };
-    const fixed = fixedTotals(fixedItems, month, today);
+    const fixed = fixedTotals(fixedItems, month, today, payments);
     series.push({
       month,
       label: formatMonthShort(month),
@@ -73,7 +79,7 @@ export async function getDashboardData(
     });
   }
 
-  const fixed = fixedTotals(fixedItems, monthStart, today);
+  const fixed = fixedTotals(fixedItems, monthStart, today, payments);
   const variable = monthlyVariable[monthStart] ?? { income: 0, expense: 0 };
   const realizedIncome = variable.income + fixed.incomeRealized;
   const realizedExpense = variable.expense + fixed.expenseRealized;
@@ -120,6 +126,9 @@ export async function getDashboardData(
       ? 0
       : lastDay;
 
+  const bills = buildBills(fixedItems, payments, monthStart, today);
+  const nextBill = bills.find((b) => b.status !== "paid") ?? null;
+
   return {
     month: monthStart,
     isCurrent,
@@ -138,5 +147,15 @@ export async function getDashboardData(
     },
     projection,
     daysLeft,
+    bills: {
+      ...summarizeBills(bills),
+      nextDue: nextBill
+        ? {
+            name: nextBill.item.description,
+            amount: nextBill.item.amount,
+            dueDate: nextBill.dueDate,
+          }
+        : null,
+    },
   };
 }

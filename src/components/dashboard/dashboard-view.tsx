@@ -6,6 +6,8 @@ import { SummaryCards } from "./summary-cards";
 import { MonthlyChart } from "./monthly-chart";
 import { ExpenseBreakdown } from "./expense-breakdown";
 import { BudgetProjection } from "./budget-projection";
+import { BillsCard } from "./bills-card";
+import { monthParam } from "@/lib/format";
 
 export function DashboardView({
   data,
@@ -32,7 +34,7 @@ export function DashboardView({
           <ol className="mt-2 space-y-2">
             <li>
               <Link href="/fixed" className="flex items-center gap-1.5 font-medium text-blue-700">
-                1. Cadastre receitas e despesas fixas <ArrowRight className="h-3.5 w-3.5" />
+                1. Cadastre suas contas e receitas fixas <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </li>
             <li>
@@ -54,6 +56,12 @@ export function DashboardView({
         currency={currency}
         isCurrent={data.isCurrent}
         isFuture={isFuture}
+      />
+
+      <BillsCard
+        bills={data.bills}
+        currency={currency}
+        monthParam={data.isCurrent ? null : monthParam(data.month)}
       />
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5">

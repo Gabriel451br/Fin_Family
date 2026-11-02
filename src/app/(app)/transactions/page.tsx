@@ -45,7 +45,7 @@ export default async function TransactionsPage({
     <div className="mx-auto max-w-xl space-y-6">
       <PageHeader
         title="Lançar"
-        description="Receitas e despesas do dia a dia (as fixas ficam em “Fixos”)."
+        description="Receitas e despesas do dia a dia (as contas fixas ficam em “Contas”)."
       />
 
       {canAdd ? (

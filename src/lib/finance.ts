@@ -1,22 +1,40 @@
 import { daysInMonth, monthStartOf } from "@/lib/format";
 
 export type FlowType = "income" | "expense";
+export type FixedFrequency = "monthly" | "yearly";
 
-/** Receita ou despesa fixa: se repete todo mês no mesmo dia. */
+/**
+ * Receita ou despesa fixa: se repete todo mês no mesmo dia, ou uma vez por
+ * ano (ex: IPVA) no mês e dia combinados.
+ */
 export interface FixedItem {
   id: string;
   description: string;
   amount: number;
   type: FlowType;
+  frequency: FixedFrequency;
   dayOfMonth: number;
   startDate: string;
   endDate: string | null;
+}
+
+/** Pagamento de uma conta fixa em um mês específico. */
+export interface FixedPayment {
+  ruleId: string;
+  /** primeiro dia do mês a que a conta se refere (AAAA-MM-01) */
+  month: string;
+  paidDate: string;
+  amount: number;
 }
 
 export function fixedActiveInMonth(item: FixedItem, monthStart: string) {
   const m = monthStart.slice(0, 7);
   if (item.startDate.slice(0, 7) > m) return false;
   if (item.endDate && item.endDate.slice(0, 7) < m) return false;
+  // conta anual só cai no mesmo mês do ano em que foi cadastrada
+  if (item.frequency === "yearly" && item.startDate.slice(5, 7) !== m.slice(5, 7)) {
+    return false;
+  }
   return true;
 }
 
@@ -25,47 +43,141 @@ export function fixedDueDay(item: FixedItem, monthStart: string) {
   return Math.min(Math.max(item.dayOfMonth, 1), daysInMonth(monthStart));
 }
 
+export function fixedDueDate(item: FixedItem, monthStart: string) {
+  return `${monthStart.slice(0, 7)}-${String(fixedDueDay(item, monthStart)).padStart(2, "0")}`;
+}
+
 export interface FixedTotals {
   incomePlanned: number;
   expensePlanned: number;
   incomeRealized: number;
+  /** despesas fixas efetivamente pagas no mês */
   expenseRealized: number;
 }
 
 /**
- * Totais dos itens fixos de um mês. Um item fixo conta como "realizado" a
- * partir do dia do vencimento: meses passados inteiros, mês atual até hoje,
- * meses futuros nada.
+ * Totais dos itens fixos de um mês.
+ * - Receitas: contam como "realizadas" a partir do dia do vencimento (meses
+ *   passados inteiros, mês atual até hoje, futuros nada).
+ * - Despesas: contam como "realizadas" só quando marcadas como pagas (pelo
+ *   valor realmente pago); o previsto usa o valor pago ou, se ainda não
+ *   pagou, o valor cadastrado.
  */
 export function fixedTotals(
   items: FixedItem[],
   monthStart: string,
   today: string,
+  payments: FixedPayment[],
 ): FixedTotals {
   const currentMonth = monthStartOf(today);
   const todayDay = Number(today.slice(8, 10));
+  const monthPayments = payments.filter((p) => p.month === monthStart);
+  const paidBy = new Map(monthPayments.map((p) => [p.ruleId, p.amount]));
   const totals: FixedTotals = {
     incomePlanned: 0,
     expensePlanned: 0,
     incomeRealized: 0,
-    expenseRealized: 0,
+    expenseRealized: monthPayments.reduce((sum, p) => sum + p.amount, 0),
   };
 
+  const activeExpenseIds = new Set<string>();
   for (const item of items) {
     if (!fixedActiveInMonth(item, monthStart)) continue;
-    const realized =
-      monthStart < currentMonth ||
-      (monthStart === currentMonth && fixedDueDay(item, monthStart) <= todayDay);
 
     if (item.type === "income") {
       totals.incomePlanned += item.amount;
+      const realized =
+        monthStart < currentMonth ||
+        (monthStart === currentMonth && fixedDueDay(item, monthStart) <= todayDay);
       if (realized) totals.incomeRealized += item.amount;
     } else {
-      totals.expensePlanned += item.amount;
-      if (realized) totals.expenseRealized += item.amount;
+      activeExpenseIds.add(item.id);
+      totals.expensePlanned += paidBy.get(item.id) ?? item.amount;
     }
   }
+  // pagamentos de contas que já foram encerradas ainda contam no mês em que ocorreram
+  for (const p of monthPayments) {
+    if (!activeExpenseIds.has(p.ruleId)) totals.expensePlanned += p.amount;
+  }
   return totals;
+}
+
+export type BillStatus = "paid" | "overdue" | "today" | "upcoming";
+
+/** Uma despesa fixa que vence em determinado mês, com a situação do pagamento. */
+export interface Bill {
+  item: FixedItem;
+  month: string;
+  dueDate: string;
+  status: BillStatus;
+  paidDate: string | null;
+  paidAmount: number | null;
+}
+
+export function buildBills(
+  items: FixedItem[],
+  payments: FixedPayment[],
+  monthStart: string,
+  today: string,
+): Bill[] {
+  const paidBy = new Map(
+    payments.filter((p) => p.month === monthStart).map((p) => [p.ruleId, p]),
+  );
+  return items
+    .filter((i) => i.type === "expense" && fixedActiveInMonth(i, monthStart))
+    .map((item): Bill => {
+      const dueDate = fixedDueDate(item, monthStart);
+      const payment = paidBy.get(item.id);
+      const status: BillStatus = payment
+        ? "paid"
+        : dueDate < today
+          ? "overdue"
+          : dueDate === today
+            ? "today"
+            : "upcoming";
+      return {
+        item,
+        month: monthStart,
+        dueDate,
+        status,
+        paidDate: payment?.paidDate ?? null,
+        paidAmount: payment?.amount ?? null,
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.dueDate.localeCompare(b.dueDate) ||
+        a.item.description.localeCompare(b.item.description),
+    );
+}
+
+export interface BillSummary {
+  paidTotal: number;
+  pendingTotal: number;
+  paidCount: number;
+  pendingCount: number;
+  overdueCount: number;
+}
+
+export function summarizeBills(bills: Bill[]): BillSummary {
+  const summary: BillSummary = {
+    paidTotal: 0,
+    pendingTotal: 0,
+    paidCount: 0,
+    pendingCount: 0,
+    overdueCount: 0,
+  };
+  for (const bill of bills) {
+    if (bill.status === "paid") {
+      summary.paidTotal += bill.paidAmount ?? bill.item.amount;
+      summary.paidCount += 1;
+    } else {
+      summary.pendingTotal += bill.item.amount;
+      summary.pendingCount += 1;
+      if (bill.status === "overdue") summary.overdueCount += 1;
+    }
+  }
+  return summary;
 }
 
 export interface CategorySpend {

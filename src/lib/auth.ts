@@ -6,9 +6,15 @@ import type { Family, FamilyMember } from "@/lib/types";
 
 export const getAuthUser = cache(async () => {
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) return null;
-  return data.user;
+  // Valida o JWT localmente (rápido); getUser faria uma ida ao servidor de auth.
+  const { data, error } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (error || !claims?.sub) return null;
+  return {
+    id: claims.sub,
+    email: claims.email as string | undefined,
+    user_metadata: (claims.user_metadata ?? {}) as { display_name?: string },
+  };
 });
 
 export async function requireAuthUser() {

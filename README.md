@@ -9,7 +9,7 @@ Funciona no navegador e pode ser instalado na tela inicial do iPhone.
 
 ## Arquitetura
 
-- **Next.js 15** (App Router, Server Actions) — um único app web responsivo,
+- **Next.js 16** (App Router, Server Actions) — um único app web responsivo,
   acessível de qualquer navegador (PC ou celular), sem necessidade de
   instalar nada.
 - **Supabase Auth** — login/cadastro com email e senha.
@@ -22,7 +22,8 @@ Funciona no navegador e pode ser instalado na tela inicial do iPhone.
   do Supabase. A conexão usa uma role dedicada (`fin_family_app`) com
   permissão **apenas** no schema `fin_family` — ela não enxerga nenhuma
   tabela do CFO IA.
-- **Vercel** — hospedagem, com deploy automático a cada push nesta branch
+- **Vercel** — hospedagem (função em São Paulo, `gru1`, perto do banco — veja
+  `vercel.json`), com deploy automático a cada push nesta branch
   (projeto `fin-family-app`, ligado ao GitHub).
 - Toda a autorização (quem pode ver/editar o quê) é verificada no servidor,
   nas Server Actions, a partir das permissões de cada membro da família
@@ -95,16 +96,21 @@ Cinco telas, pensadas para o celular:
 - **Lançar** — receitas e despesas variáveis (mercado, restaurante, farmácia…):
   valor, toque na categoria da sua **lista personalizada**, pronto. Dá para
   criar categorias na hora (botão "Nova").
-- **Fixos** — receitas e despesas que se repetem todo mês no mesmo dia
-  (salário, aluguel, escola…). Cadastre uma vez; entram sozinhas no Painel a
-  partir do dia do vencimento.
+- **Contas** — controle do mês: despesas fixas (aluguel, escola, IPVA…) com
+  situação de cada uma (**paga**, **atrasada**, **vence hoje**, **a vencer**),
+  total *já pago* e *falta pagar*. Toque em **Pagar** e informe a data e o
+  valor pago (dá para editar ou desfazer). As contas podem ser **mensais** ou
+  **anuais** (ex: IPVA aparece só no mês combinado). Contas do mês passado sem
+  pagar aparecem em destaque. As receitas fixas (salário…) ficam na mesma tela.
 - **Orçamento** — limite mensal por categoria de despesa, com a projeção do mês.
   O limite vale a partir do mês atual e se repete até ser alterado.
 - **Mais** — categorias (a lista personalizada), família (convites e
   permissões) e configurações.
 
-**Contas do Painel:** realizado = lançamentos variáveis + fixos já vencidos.
-Projeção = fixos do mês inteiro + variáveis já lançados + o que ainda resta de
+**Contas do Painel:** realizado = lançamentos variáveis + receitas fixas já
+vencidas + despesas fixas **marcadas como pagas** (o painel também mostra o
+card "Contas do mês" com o que falta pagar).
+Projeção = fixos do mês inteiro (pago ou previsto) + variáveis já lançados + o que ainda resta de
 cada orçamento (assume que cada categoria com orçamento será usada até o
 limite; categorias sem orçamento entram só com o que já foi gasto).
 

@@ -10,7 +10,8 @@ import {
   removeFixedItem,
   updateFixedItem,
 } from "@/lib/data/fixed";
-import type { FlowType } from "@/lib/finance";
+import { markPaid, undoPaid } from "@/lib/data/payments";
+import type { FixedFrequency, FlowType } from "@/lib/finance";
 
 function refresh() {
   revalidatePath("/fixed");
@@ -35,19 +36,29 @@ export async function saveFixedAction(
     const amount = parseMoney(String(formData.get("amount") ?? ""));
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Informe um valor maior que zero.");
 
+    const frequency = String(formData.get("frequency") ?? "monthly") as FixedFrequency;
+    if (frequency !== "monthly" && frequency !== "yearly") throw new Error("Frequência inválida.");
+
+    const monthOfYear = Number(formData.get("month_of_year") ?? 1);
+    if (frequency === "yearly" && (!Number.isInteger(monthOfYear) || monthOfYear < 1 || monthOfYear > 12)) {
+      throw new Error("Escolha o mês do vencimento.");
+    }
+
     const dayOfMonth = Number(formData.get("day_of_month"));
     if (!Number.isInteger(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31) {
       throw new Error("O dia deve ser entre 1 e 31.");
     }
 
     if (id) {
-      await updateFixedItem(member.family_id, id, { description, amount, dayOfMonth });
+      await updateFixedItem(member.family_id, id, { description, amount, dayOfMonth, monthOfYear });
     } else {
       await createFixedItem({
         familyId: member.family_id,
         description,
         amount,
         type,
+        frequency,
+        monthOfYear,
         dayOfMonth,
         createdBy: user.id,
       });
@@ -64,6 +75,57 @@ export async function removeFixedAction(id: string): Promise<ActionResult> {
   try {
     requirePermission(member, "manage_budgets_goals");
     await removeFixedItem(member.family_id, id);
+  } catch (err) {
+    return actionError(err);
+  }
+  refresh();
+  return { ok: true };
+}
+
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])-01$/;
+const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+/** Marca a conta do mês como paga (ou corrige a data/valor de um pagamento). */
+export async function markPaidAction(
+  ruleId: string,
+  month: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  const { user, member } = await requireCurrentMember();
+  try {
+    requirePermission(member, "add_transactions");
+    if (!MONTH_RE.test(month)) throw new Error("Mês inválido.");
+
+    const paidDate = String(formData.get("paid_date") ?? "");
+    if (!DATE_RE.test(paidDate)) throw new Error("Informe a data do pagamento.");
+
+    const amount = parseMoney(String(formData.get("amount") ?? ""));
+    if (!Number.isFinite(amount) || amount < 0) throw new Error("Informe o valor pago.");
+
+    await markPaid({
+      familyId: member.family_id,
+      ruleId,
+      month,
+      paidDate,
+      amount,
+      paidBy: user.id,
+    });
+  } catch (err) {
+    return actionError(err);
+  }
+  refresh();
+  return { ok: true };
+}
+
+export async function undoPaidAction(
+  ruleId: string,
+  month: string,
+): Promise<ActionResult> {
+  const { member } = await requireCurrentMember();
+  try {
+    requirePermission(member, "add_transactions");
+    if (!MONTH_RE.test(month)) throw new Error("Mês inválido.");
+    await undoPaid(member.family_id, ruleId, month);
   } catch (err) {
     return actionError(err);
   }

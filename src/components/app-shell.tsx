@@ -27,7 +27,7 @@ type NavItem = {
 const MAIN_NAV: NavItem[] = [
   { href: "/dashboard", label: "Painel", icon: LayoutDashboard },
   { href: "/transactions", label: "Lançar", icon: Plus },
-  { href: "/fixed", label: "Fixos", icon: CalendarClock },
+  { href: "/fixed", label: "Contas", icon: CalendarClock },
   { href: "/budgets", label: "Orçamento", icon: PieChart },
 ];
 
