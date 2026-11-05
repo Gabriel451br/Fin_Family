@@ -128,6 +128,8 @@ export interface Transaction {
   description: string;
   amount: string;
   date: string;
+  /** 'cash' = dinheiro/conta, 'benefit' = vale (VA/VR) */
+  wallet: "cash" | "benefit";
   recurring_rule_id: string | null;
   installment_group_id: string | null;
   installment_number: number | null;

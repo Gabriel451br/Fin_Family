@@ -1,6 +1,6 @@
 import { sql } from "@/lib/db/client";
 import type { Transaction } from "@/lib/types";
-import type { FlowType } from "@/lib/finance";
+import type { FlowType, Wallet } from "@/lib/finance";
 
 export interface TransactionWithDetails extends Transaction {
   category_name: string | null;
@@ -49,6 +49,7 @@ export interface TransactionInput {
   description: string;
   amount: number;
   date: string;
+  wallet: Wallet;
 }
 
 export async function createTransaction(
@@ -58,10 +59,10 @@ export async function createTransaction(
 ) {
   await sql`
     insert into fin_family.transactions
-      (family_id, category_id, member_id, type, description, amount, date, created_by)
+      (family_id, category_id, member_id, type, description, amount, date, wallet, created_by)
     values (
       ${familyId}, ${input.categoryId}, ${input.memberId}, ${input.type},
-      ${input.description}, ${input.amount}, ${input.date}, ${createdBy}
+      ${input.description}, ${input.amount}, ${input.date}, ${input.wallet}, ${createdBy}
     )
   `;
 }
@@ -75,7 +76,7 @@ export async function updateTransaction(
     update fin_family.transactions
     set category_id = ${input.categoryId}, member_id = ${input.memberId}, type = ${input.type},
         description = ${input.description}, amount = ${input.amount}, date = ${input.date},
-        updated_at = now()
+        wallet = ${input.wallet}, updated_at = now()
     where family_id = ${familyId} and id = ${id}
   `;
 }
@@ -132,4 +133,32 @@ export async function getExpenseByCategory(familyId: string, monthStart: string)
     name: r.name,
     spent: Number(r.total),
   }));
+}
+
+export interface WalletTotals {
+  cash: { income: number; expense: number };
+  benefit: { income: number; expense: number };
+}
+
+/** Receitas e despesas variáveis do mês separadas entre dinheiro e vale (VA/VR). */
+export async function getWalletTotals(
+  familyId: string,
+  monthStart: string,
+): Promise<WalletTotals> {
+  const rows = await sql<{ wallet: Wallet; type: FlowType; total: number }[]>`
+    select wallet, type::text as type, sum(amount)::float8 as total
+    from fin_family.transactions
+    where family_id = ${familyId}
+      and status = 'confirmed'
+      and type in ('income', 'expense')
+      and date >= ${monthStart}::date
+      and date < (${monthStart}::date + interval '1 month')
+    group by 1, 2
+  `;
+  const totals: WalletTotals = {
+    cash: { income: 0, expense: 0 },
+    benefit: { income: 0, expense: 0 },
+  };
+  for (const row of rows) totals[row.wallet][row.type] = Number(row.total);
+  return totals;
 }

@@ -7,7 +7,7 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/cn";
 import { todayISO } from "@/lib/format";
-import type { FlowType } from "@/lib/finance";
+import { WALLET_LABELS, type FlowType, type Wallet } from "@/lib/finance";
 import { createCategoryAction } from "../categories/actions";
 import { saveTransactionAction } from "./actions";
 
@@ -26,6 +26,7 @@ export interface EntryTransaction {
   description: string;
   category_id: string | null;
   member_id: string | null;
+  wallet: Wallet;
 }
 
 export function EntryForm({
@@ -45,6 +46,7 @@ export function EntryForm({
 }) {
   const [type, setType] = useState<FlowType>(transaction?.type ?? "expense");
   const [categoryId, setCategoryId] = useState(transaction?.category_id ?? "");
+  const [wallet, setWallet] = useState<Wallet>(transaction?.wallet ?? "cash");
   const [extra, setExtra] = useState<EntryCategory[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -66,6 +68,7 @@ export function EntryForm({
     if (!transaction) {
       setFormKey((k) => k + 1);
       setCategoryId("");
+      setWallet("cash");
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     }
@@ -91,6 +94,7 @@ export function EntryForm({
     <form key={formKey} action={submit} className="space-y-4">
       <input type="hidden" name="type" value={type} />
       <input type="hidden" name="category_id" value={categoryId} />
+      <input type="hidden" name="wallet" value={wallet} />
 
       <div className="grid grid-cols-2 gap-2" role="group" aria-label="Tipo de lançamento">
         {(
@@ -129,6 +133,28 @@ export function EntryForm({
           required
           defaultValue={transaction ? Number(transaction.amount).toFixed(2).replace(".", ",") : ""}
         />
+      </div>
+
+      <div>
+        <Label>{type === "expense" ? "Pago com" : "Recebido como"}</Label>
+        <div className="grid grid-cols-2 gap-2" role="group" aria-label="Dinheiro ou vale">
+          {(["cash", "benefit"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setWallet(value)}
+              aria-pressed={wallet === value}
+              className={cn(
+                "rounded-lg border py-2 text-sm font-medium transition-colors",
+                wallet === value
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+              )}
+            >
+              {WALLET_LABELS[value]}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div>

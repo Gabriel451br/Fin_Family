@@ -102,6 +102,14 @@ Cinco telas, pensadas para o celular:
   valor pago (dá para editar ou desfazer). As contas podem ser **mensais** ou
   **anuais** (ex: IPVA aparece só no mês combinado). Contas do mês passado sem
   pagar aparecem em destaque. As receitas fixas (salário…) ficam na mesma tela.
+  - **Débito automático**: marque nas contas que caem sozinhas. Elas não ficam
+    como "a pagar", não geram aviso e contam como pagas no dia do vencimento
+    (dá para ajustar o valor se vier diferente).
+  - **VA/VR**: nas receitas fixas e nos lançamentos escolha se é *Dinheiro* ou
+    *VA/VR*; o Painel mostra o saldo total e, separado, o saldo de dinheiro e o
+    de vale.
+- **Aviso de vencimento** — no topo do Painel aparecem as contas a pagar à mão
+  que já venceram ou vencem em até 3 dias.
 - **Orçamento** — limite mensal por categoria de despesa, com a projeção do mês.
   O limite vale a partir do mês atual e se repete até ser alterado.
 - **Mais** — categorias (a lista personalizada), família (convites e

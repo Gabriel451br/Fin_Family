@@ -2,6 +2,13 @@ import { daysInMonth, monthStartOf } from "@/lib/format";
 
 export type FlowType = "income" | "expense";
 export type FixedFrequency = "monthly" | "yearly";
+/** Onde o dinheiro está: conta/dinheiro ou vale (VA/VR). */
+export type Wallet = "cash" | "benefit";
+
+export const WALLET_LABELS: Record<Wallet, string> = {
+  cash: "Dinheiro",
+  benefit: "VA/VR",
+};
 
 /**
  * Receita ou despesa fixa: se repete todo mês no mesmo dia, ou uma vez por
@@ -16,6 +23,10 @@ export interface FixedItem {
   dayOfMonth: number;
   startDate: string;
   endDate: string | null;
+  /** receitas: entra como dinheiro ou como vale (VA/VR) */
+  wallet: Wallet;
+  /** despesas: debitada sozinha no vencimento (não precisa lembrar de pagar) */
+  autoDebit: boolean;
 }
 
 /** Pagamento de uma conta fixa em um mês específico. */
@@ -51,7 +62,9 @@ export interface FixedTotals {
   incomePlanned: number;
   expensePlanned: number;
   incomeRealized: number;
-  /** despesas fixas efetivamente pagas no mês */
+  /** parte de incomeRealized que entrou como vale (VA/VR) */
+  incomeRealizedBenefit: number;
+  /** despesas fixas efetivamente pagas (ou debitadas automaticamente) no mês */
   expenseRealized: number;
 }
 
@@ -77,6 +90,7 @@ export function fixedTotals(
     incomePlanned: 0,
     expensePlanned: 0,
     incomeRealized: 0,
+    incomeRealizedBenefit: 0,
     expenseRealized: monthPayments.reduce((sum, p) => sum + p.amount, 0),
   };
 
@@ -89,10 +103,22 @@ export function fixedTotals(
       const realized =
         monthStart < currentMonth ||
         (monthStart === currentMonth && fixedDueDay(item, monthStart) <= todayDay);
-      if (realized) totals.incomeRealized += item.amount;
+      if (realized) {
+        totals.incomeRealized += item.amount;
+        if (item.wallet === "benefit") totals.incomeRealizedBenefit += item.amount;
+      }
     } else {
       activeExpenseIds.add(item.id);
       totals.expensePlanned += paidBy.get(item.id) ?? item.amount;
+      // débito automático sem ajuste manual: conta como paga a partir do vencimento
+      if (
+        item.autoDebit &&
+        !paidBy.has(item.id) &&
+        (monthStart < currentMonth ||
+          (monthStart === currentMonth && fixedDueDay(item, monthStart) <= todayDay))
+      ) {
+        totals.expenseRealized += item.amount;
+      }
     }
   }
   // pagamentos de contas que já foram encerradas ainda contam no mês em que ocorreram
@@ -102,7 +128,22 @@ export function fixedTotals(
   return totals;
 }
 
-export type BillStatus = "paid" | "overdue" | "today" | "upcoming";
+/**
+ * paid = paga; overdue/today/upcoming = a pagar à mão; auto_done = já debitada
+ * automaticamente; auto_scheduled = débito automático ainda por vir.
+ */
+export type BillStatus =
+  | "paid"
+  | "overdue"
+  | "today"
+  | "upcoming"
+  | "auto_done"
+  | "auto_scheduled";
+
+/** Contas que não exigem ação do usuário (débito automático). */
+export function isAutoStatus(status: BillStatus) {
+  return status === "auto_done" || status === "auto_scheduled";
+}
 
 /** Uma despesa fixa que vence em determinado mês, com a situação do pagamento. */
 export interface Bill {
@@ -130,18 +171,22 @@ export function buildBills(
       const payment = paidBy.get(item.id);
       const status: BillStatus = payment
         ? "paid"
-        : dueDate < today
-          ? "overdue"
-          : dueDate === today
-            ? "today"
-            : "upcoming";
+        : item.autoDebit
+          ? dueDate <= today
+            ? "auto_done"
+            : "auto_scheduled"
+          : dueDate < today
+            ? "overdue"
+            : dueDate === today
+              ? "today"
+              : "upcoming";
       return {
         item,
         month: monthStart,
         dueDate,
         status,
-        paidDate: payment?.paidDate ?? null,
-        paidAmount: payment?.amount ?? null,
+        paidDate: payment?.paidDate ?? (status === "auto_done" ? dueDate : null),
+        paidAmount: payment?.amount ?? (status === "auto_done" ? item.amount : null),
       };
     })
     .sort(
@@ -152,11 +197,16 @@ export function buildBills(
 }
 
 export interface BillSummary {
+  /** já pago (inclui o que foi debitado automaticamente) */
   paidTotal: number;
+  /** falta pagar à mão */
   pendingTotal: number;
   paidCount: number;
   pendingCount: number;
   overdueCount: number;
+  /** débito automático que ainda vai cair no mês */
+  autoTotal: number;
+  autoCount: number;
 }
 
 export function summarizeBills(bills: Bill[]): BillSummary {
@@ -166,9 +216,14 @@ export function summarizeBills(bills: Bill[]): BillSummary {
     paidCount: 0,
     pendingCount: 0,
     overdueCount: 0,
+    autoTotal: 0,
+    autoCount: 0,
   };
   for (const bill of bills) {
-    if (bill.status === "paid") {
+    if (bill.status === "auto_scheduled") {
+      summary.autoTotal += bill.item.amount;
+      summary.autoCount += 1;
+    } else if (bill.status === "paid" || bill.status === "auto_done") {
       summary.paidTotal += bill.paidAmount ?? bill.item.amount;
       summary.paidCount += 1;
     } else {
@@ -178,6 +233,41 @@ export function summarizeBills(bills: Bill[]): BillSummary {
     }
   }
   return summary;
+}
+
+export interface DueAlert {
+  id: string;
+  name: string;
+  amount: number;
+  dueDate: string;
+  /** negativo = dias de atraso; 0 = hoje */
+  daysLeft: number;
+}
+
+/** Dias entre duas datas AAAA-MM-DD (b - a). */
+export function daysBetween(a: string, b: string) {
+  const ms = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
+  return Math.round((ms(b) - ms(a)) / 86_400_000);
+}
+
+export const DUE_SOON_DAYS = 3;
+
+/**
+ * Contas a pagar à mão que já venceram ou vencem nos próximos dias.
+ * Débito automático nunca entra (não exige ação).
+ */
+export function buildDueAlerts(bills: Bill[], today: string): DueAlert[] {
+  return bills
+    .filter((b) => b.status === "overdue" || b.status === "today" || b.status === "upcoming")
+    .map((b) => ({
+      id: `${b.item.id}-${b.month}`,
+      name: b.item.description,
+      amount: b.item.amount,
+      dueDate: b.dueDate,
+      daysLeft: daysBetween(today, b.dueDate),
+    }))
+    .filter((a) => a.daysLeft <= DUE_SOON_DAYS)
+    .sort((a, b) => a.daysLeft - b.daysLeft || a.name.localeCompare(b.name));
 }
 
 export interface CategorySpend {

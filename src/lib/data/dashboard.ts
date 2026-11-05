@@ -8,10 +8,12 @@ import {
   buildBudgetRows,
   buildProjection,
   buildBills,
+  buildDueAlerts,
   fixedTotals,
   summarizeBills,
   type BillSummary,
   type BudgetRow,
+  type DueAlert,
   type Projection,
 } from "@/lib/finance";
 import { listFixedItems } from "@/lib/data/fixed";
@@ -20,6 +22,7 @@ import { getBudgetLimits } from "@/lib/data/budgets";
 import {
   getExpenseByCategory,
   getMonthlyVariableTotals,
+  getWalletTotals,
 } from "@/lib/data/transactions";
 
 export interface MonthPoint {
@@ -34,6 +37,12 @@ export interface ExpenseSlice {
   amount: number;
 }
 
+export interface WalletBalance {
+  income: number;
+  expense: number;
+  balance: number;
+}
+
 export interface DashboardData {
   month: string;
   isCurrent: boolean;
@@ -45,6 +54,9 @@ export interface DashboardData {
   budgetTotals: { limit: number; spent: number };
   projection: Projection;
   daysLeft: number;
+  wallets: { cash: WalletBalance; benefit: WalletBalance };
+  /** contas a pagar à mão atrasadas ou que vencem em poucos dias (só no mês atual) */
+  alerts: DueAlert[];
   bills: BillSummary & { nextDue: { name: string; amount: number; dueDate: string } | null };
 }
 
@@ -58,12 +70,18 @@ export async function getDashboardData(
   const currentMonth = currentMonthStartISO();
   const seriesStart = addMonthsISO(monthStart, -5);
 
-  const [fixedItems, payments, monthlyVariable, byCategory, limits] = await Promise.all([
+  const isCurrent = monthStart === currentMonth;
+  // no mês atual também olhamos o mês seguinte (contas do dia 1º avisam no fim do mês)
+  const paymentsTo = isCurrent ? addMonthsISO(monthStart, 1) : monthStart;
+
+  const [fixedItems, payments, monthlyVariable, byCategory, limits, walletVariable] =
+    await Promise.all([
     listFixedItems(familyId),
-    listPayments(familyId, seriesStart, monthStart),
+    listPayments(familyId, seriesStart, paymentsTo),
     getMonthlyVariableTotals(familyId, seriesStart, monthStart),
     getExpenseByCategory(familyId, monthStart),
     getBudgetLimits(familyId, monthStart),
+    getWalletTotals(familyId, monthStart),
   ]);
 
   const series: MonthPoint[] = [];
@@ -115,7 +133,6 @@ export async function getDashboardData(
     budgetRows,
   });
 
-  const isCurrent = monthStart === currentMonth;
   const isPast = monthStart < currentMonth;
   const lastDay = new Date(
     Date.UTC(Number(monthStart.slice(0, 4)), Number(monthStart.slice(5, 7)), 0),
@@ -127,7 +144,26 @@ export async function getDashboardData(
       : lastDay;
 
   const bills = buildBills(fixedItems, payments, monthStart, today);
-  const nextBill = bills.find((b) => b.status !== "paid") ?? null;
+  const nextBill =
+    bills.find((b) => ["overdue", "today", "upcoming"].includes(b.status)) ?? null;
+
+  // Dinheiro x VA/VR: variáveis por carteira + receitas fixas de vale; despesas fixas são em dinheiro
+  const fixedBenefitIncome = fixed.incomeRealizedBenefit;
+  const cashIncome = walletVariable.cash.income + (fixed.incomeRealized - fixedBenefitIncome);
+  const cashExpense = walletVariable.cash.expense + fixed.expenseRealized;
+  const benefitIncome = walletVariable.benefit.income + fixedBenefitIncome;
+  const benefitExpense = walletVariable.benefit.expense;
+
+  const alerts = isCurrent
+    ? buildDueAlerts(
+        [
+          ...buildBills(fixedItems, payments, addMonthsISO(monthStart, -1), today),
+          ...bills,
+          ...buildBills(fixedItems, payments, addMonthsISO(monthStart, 1), today),
+        ],
+        today,
+      )
+    : [];
 
   return {
     month: monthStart,
@@ -147,6 +183,15 @@ export async function getDashboardData(
     },
     projection,
     daysLeft,
+    wallets: {
+      cash: { income: cashIncome, expense: cashExpense, balance: cashIncome - cashExpense },
+      benefit: {
+        income: benefitIncome,
+        expense: benefitExpense,
+        balance: benefitIncome - benefitExpense,
+      },
+    },
+    alerts,
     bills: {
       ...summarizeBills(bills),
       nextDue: nextBill

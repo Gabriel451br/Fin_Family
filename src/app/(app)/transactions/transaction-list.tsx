@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { formatCurrency, formatDayMonth } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { WALLET_LABELS } from "@/lib/finance";
 import { EntryForm, type EntryCategory, type EntryTransaction } from "./entry-form";
 import { deleteTransactionAction } from "./actions";
 
@@ -91,6 +92,7 @@ export function TransactionList({
                       </span>
                       <span className="block truncate text-xs text-slate-500">
                         {t.category_name ?? "Sem categoria"}
+                        {t.wallet === "benefit" ? ` · ${WALLET_LABELS.benefit}` : ""}
                         {members.length > 1 && t.member_name ? ` · ${t.member_name}` : ""}
                       </span>
                     </span>

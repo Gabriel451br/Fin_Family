@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, ChevronRight } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
 import { formatCurrency, formatDayMonth } from "@/lib/format";
 import type { DashboardData } from "@/lib/data/dashboard";
 
@@ -13,12 +13,13 @@ export function BillsCard({
   currency: string;
   monthParam: string | null;
 }) {
-  const count = bills.paidCount + bills.pendingCount;
+  const count = bills.paidCount + bills.pendingCount + bills.autoCount;
   if (count === 0) return null;
 
-  const total = bills.paidTotal + bills.pendingTotal;
+  const total = bills.paidTotal + bills.pendingTotal + bills.autoTotal;
   const pct = total > 0 ? Math.round((bills.paidTotal / total) * 100) : 0;
   const allPaid = bills.pendingCount === 0;
+  const onlyAutoLeft = allPaid && bills.autoCount > 0;
 
   return (
     <Link
@@ -56,6 +57,13 @@ export function BillsCard({
         <div className="h-full rounded-full bg-[#2a78d6]" style={{ width: `${pct}%` }} />
       </div>
 
+      {bills.autoCount > 0 && (
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
+          <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {formatCurrency(bills.autoTotal, currency)} ainda cai em débito automático
+        </p>
+      )}
+
       <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
         {bills.overdueCount > 0 ? (
           <>
@@ -67,7 +75,11 @@ export function BillsCard({
         ) : allPaid ? (
           <>
             <CheckCircle2 className="h-3.5 w-3.5 text-[#1c5cab]" aria-hidden />
-            <span className="font-medium">Todas as contas do mês foram pagas</span>
+            <span className="font-medium">
+              {onlyAutoLeft
+                ? "Nada a pagar à mão — o resto cai sozinho"
+                : "Todas as contas do mês foram pagas"}
+            </span>
           </>
         ) : bills.nextDue ? (
           <span>

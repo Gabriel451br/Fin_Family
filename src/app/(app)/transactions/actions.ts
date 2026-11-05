@@ -18,7 +18,7 @@ import {
   updateTransaction,
   type TransactionInput,
 } from "@/lib/data/transactions";
-import type { FlowType } from "@/lib/finance";
+import type { FlowType, Wallet } from "@/lib/finance";
 
 function refresh() {
   revalidatePath("/transactions");
@@ -37,6 +37,9 @@ export async function saveTransactionAction(
 
     const amount = parseMoney(String(formData.get("amount") ?? ""));
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Informe um valor maior que zero.");
+
+    const wallet = String(formData.get("wallet") ?? "cash") as Wallet;
+    if (wallet !== "cash" && wallet !== "benefit") throw new Error("Carteira inválida.");
 
     const date = String(formData.get("date") ?? "");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Informe a data.");
@@ -62,6 +65,7 @@ export async function saveTransactionAction(
       type,
       amount,
       date,
+      wallet,
       categoryId,
       memberId,
       description:

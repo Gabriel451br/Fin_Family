@@ -84,6 +84,7 @@ export default async function TransactionsPage({
             description: t.description,
             category_id: t.category_id,
             member_id: t.member_id,
+            wallet: t.wallet,
             category_name: t.category_name,
             category_color: t.category_color,
             member_name: t.member_name,

@@ -7,6 +7,8 @@ import { MonthlyChart } from "./monthly-chart";
 import { ExpenseBreakdown } from "./expense-breakdown";
 import { BudgetProjection } from "./budget-projection";
 import { BillsCard } from "./bills-card";
+import { DueAlerts } from "./due-alerts";
+import { WalletsCard } from "./wallets-card";
 import { monthParam } from "@/lib/format";
 
 export function DashboardView({
@@ -27,6 +29,8 @@ export function DashboardView({
   return (
     <div className="space-y-6">
       <MonthNav month={data.month} basePath="/dashboard" />
+
+      <DueAlerts alerts={data.alerts} currency={currency} />
 
       {nothingYet && (
         <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-slate-700">
@@ -57,6 +61,8 @@ export function DashboardView({
         isCurrent={data.isCurrent}
         isFuture={isFuture}
       />
+
+      <WalletsCard wallets={data.wallets} currency={currency} />
 
       <BillsCard
         bills={data.bills}

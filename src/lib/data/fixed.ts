@@ -1,6 +1,6 @@
 import { sql } from "@/lib/db/client";
 import { addMonthsISO, currentMonthStartISO, monthStartOf } from "@/lib/format";
-import type { FixedFrequency, FixedItem, FlowType } from "@/lib/finance";
+import type { FixedFrequency, FixedItem, FlowType, Wallet } from "@/lib/finance";
 
 interface FixedRow {
   id: string;
@@ -11,6 +11,8 @@ interface FixedRow {
   day_of_month: number | null;
   start_date: string;
   end_date: string | null;
+  wallet: Wallet;
+  auto_debit: boolean;
 }
 
 function toItem(row: FixedRow): FixedItem {
@@ -23,6 +25,8 @@ function toItem(row: FixedRow): FixedItem {
     dayOfMonth: row.day_of_month ?? 1,
     startDate: row.start_date,
     endDate: row.end_date,
+    wallet: row.wallet,
+    autoDebit: row.auto_debit,
   };
 }
 
@@ -30,7 +34,7 @@ function toItem(row: FixedRow): FixedItem {
 export async function listFixedItems(familyId: string): Promise<FixedItem[]> {
   const rows = await sql<FixedRow[]>`
     select id, description, amount, type::text as type, frequency::text as frequency,
-      day_of_month, start_date, end_date
+      day_of_month, start_date, end_date, wallet, auto_debit
     from fin_family.recurring_rules
     where family_id = ${familyId} and is_active = true and type in ('income', 'expense')
       and frequency in ('monthly', 'yearly')
@@ -61,6 +65,8 @@ export async function createFixedItem(data: {
   /** 1-12; só usado nas contas anuais */
   monthOfYear: number;
   dayOfMonth: number;
+  wallet: Wallet;
+  autoDebit: boolean;
   createdBy: string;
 }) {
   const startDate =
@@ -69,10 +75,12 @@ export async function createFixedItem(data: {
       : currentMonthStartISO();
   await sql`
     insert into fin_family.recurring_rules
-      (family_id, description, amount, type, frequency, interval_count, day_of_month, start_date, created_by)
+      (family_id, description, amount, type, frequency, interval_count, day_of_month, start_date,
+       wallet, auto_debit, created_by)
     values (
       ${data.familyId}, ${data.description}, ${data.amount}, ${data.type},
-      ${data.frequency}, 1, ${data.dayOfMonth}, ${startDate}, ${data.createdBy}
+      ${data.frequency}, 1, ${data.dayOfMonth}, ${startDate},
+      ${data.wallet}, ${data.autoDebit}, ${data.createdBy}
     )
   `;
 }
@@ -86,6 +94,8 @@ export async function updateFixedItem(
     dayOfMonth: number;
     /** 1-12; só vale para contas anuais */
     monthOfYear: number;
+    wallet: Wallet;
+    autoDebit: boolean;
   },
 ) {
   const [row] = await sql<{ frequency: FixedFrequency; start_date: string }[]>`
@@ -102,7 +112,8 @@ export async function updateFixedItem(
   await sql`
     update fin_family.recurring_rules
     set description = ${data.description}, amount = ${data.amount},
-        day_of_month = ${data.dayOfMonth}, start_date = ${startDate}
+        day_of_month = ${data.dayOfMonth}, start_date = ${startDate},
+        wallet = ${data.wallet}, auto_debit = ${data.autoDebit}
     where family_id = ${familyId} and id = ${id}
   `;
 }

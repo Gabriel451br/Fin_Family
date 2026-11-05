@@ -33,7 +33,7 @@ export default async function FixedPage({
   // contas do mês passado que ficaram sem pagar (só faz sentido olhando o mês atual)
   const overdueBefore =
     month === currentMonthStartISO()
-      ? buildBills(items, payments, prevMonth, today).filter((b) => b.status !== "paid")
+      ? buildBills(items, payments, prevMonth, today).filter((b) => b.status === "overdue")
       : [];
   const incomes = items.filter(
     (i) => i.type === "income" && fixedActiveInMonth(i, month),

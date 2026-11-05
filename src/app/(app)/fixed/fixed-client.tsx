@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   Plus,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
 import { Input, Label, Select, FieldError } from "@/components/ui/field";
@@ -14,6 +15,7 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { Modal } from "@/components/ui/modal";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatCurrency, formatDayMonth, formatMonth } from "@/lib/format";
+import { DUE_SOON_DAYS, WALLET_LABELS, daysBetween } from "@/lib/finance";
 import type {
   Bill,
   BillStatus,
@@ -21,6 +23,7 @@ import type {
   FixedFrequency,
   FixedItem,
   FlowType,
+  Wallet,
 } from "@/lib/finance";
 import {
   markPaidAction,
@@ -51,14 +54,31 @@ const STATUS_STYLE: Record<BillStatus, string> = {
   overdue: "text-[#d03b3b]",
   today: "text-amber-700",
   upcoming: "text-slate-500",
+  auto_done: "text-[#1c5cab]",
+  auto_scheduled: "text-slate-500",
 };
 
 function dueText(bill: Bill) {
   return `dia ${Number(bill.dueDate.slice(8, 10))}`;
 }
 
-function StatusLine({ bill }: { bill: Bill }) {
+function StatusLine({ bill, today }: { bill: Bill; today: string }) {
   const cls = `flex items-center gap-1 text-xs font-medium ${STATUS_STYLE[bill.status]}`;
+  if (bill.status === "auto_done") {
+    return (
+      <span className={cls}>
+        <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Debitada automaticamente em{" "}
+        {formatDayMonth(bill.dueDate)}
+      </span>
+    );
+  }
+  if (bill.status === "auto_scheduled") {
+    return (
+      <span className={cls}>
+        <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Débito automático {dueText(bill)}
+      </span>
+    );
+  }
   if (bill.status === "paid") {
     return (
       <span className={cls}>
@@ -79,6 +99,14 @@ function StatusLine({ bill }: { bill: Bill }) {
     return (
       <span className={cls}>
         <Clock className="h-3.5 w-3.5" aria-hidden /> Vence hoje
+      </span>
+    );
+  }
+  const days = daysBetween(today, bill.dueDate);
+  if (days <= DUE_SOON_DAYS) {
+    return (
+      <span className={`flex items-center gap-1 text-xs font-medium ${STATUS_STYLE.today}`}>
+        <Clock className="h-3.5 w-3.5" aria-hidden /> Vence em {days} {days === 1 ? "dia" : "dias"}
       </span>
     );
   }
@@ -115,9 +143,9 @@ export function FixedClient({
   const [editing, setEditing] = useState<Editing>(null);
   const [paying, setPaying] = useState<Bill | null>(null);
 
-  const total = summary.paidTotal + summary.pendingTotal;
+  const total = summary.paidTotal + summary.pendingTotal + summary.autoTotal;
   const pct = total > 0 ? Math.round((summary.paidTotal / total) * 100) : 0;
-  const count = summary.paidCount + summary.pendingCount;
+  const count = summary.paidCount + summary.pendingCount + summary.autoCount;
 
   return (
     <div className="space-y-6">
@@ -149,16 +177,23 @@ export function FixedClient({
         >
           <div className="h-full rounded-full bg-[#2a78d6]" style={{ width: `${pct}%` }} />
         </div>
-        <p className="mt-2 text-xs text-slate-500">
-          {count === 0
+        <div className="mt-2 space-y-1 text-xs text-slate-500">
+          {summary.autoCount > 0 && (
+            <p className="flex items-center gap-1 text-slate-600">
+              <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {formatCurrency(summary.autoTotal, currency)} ainda cai em débito automático — sem
+              ação sua
+            </p>
+          )}
+          <p>{count === 0
             ? "Nenhuma conta neste mês."
             : `${summary.paidCount} de ${count} contas pagas` +
               (summary.overdueCount > 0
                 ? ` · ${summary.overdueCount} em atraso`
                 : summary.pendingCount === 0
                   ? " · tudo em dia!"
-                  : "")}
-        </p>
+                  : "")}</p>
+        </div>
       </section>
 
       {/* Atrasadas do mês anterior */}
@@ -175,6 +210,7 @@ export function FixedClient({
             currency={currency}
             canManage={canManage}
             canPay={canPay}
+            today={today}
             onEdit={(item) => setEditing({ item, type: item.type })}
             onPay={setPaying}
           />
@@ -197,6 +233,7 @@ export function FixedClient({
             currency={currency}
             canManage={canManage}
             canPay={canPay}
+            today={today}
             onEdit={(item) => setEditing({ item, type: item.type })}
             onPay={setPaying}
           />
@@ -235,6 +272,11 @@ export function FixedClient({
                     {item.description}
                     {item.frequency === "yearly" && (
                       <span className="ml-2 text-xs font-normal text-slate-500">anual</span>
+                    )}
+                    {item.wallet === "benefit" && (
+                      <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                        {WALLET_LABELS.benefit}
+                      </span>
                     )}
                   </span>
                   <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">
@@ -319,7 +361,13 @@ export function FixedClient({
       <Modal
         open={paying !== null}
         onClose={() => setPaying(null)}
-        title={paying?.status === "paid" ? "Pagamento" : "Marcar como paga"}
+        title={
+          paying?.status === "paid"
+            ? "Pagamento"
+            : paying?.status === "auto_done"
+              ? "Ajustar débito automático"
+              : "Marcar como paga"
+        }
       >
         {paying && (
           <PayForm
@@ -362,6 +410,7 @@ function BillList({
   currency,
   canManage,
   canPay,
+  today,
   onEdit,
   onPay,
 }: {
@@ -369,13 +418,15 @@ function BillList({
   currency: string;
   canManage: boolean;
   canPay: boolean;
+  today: string;
   onEdit: (item: FixedItem) => void;
   onPay: (bill: Bill) => void;
 }) {
   return (
     <ul className="divide-y divide-slate-100">
       {bills.map((bill) => {
-        const paid = bill.status === "paid";
+        const paid = bill.status === "paid" || bill.status === "auto_done";
+        const scheduled = bill.status === "auto_scheduled";
         const amount = paid ? (bill.paidAmount ?? bill.item.amount) : bill.item.amount;
         return (
           <li key={`${bill.item.id}-${bill.month}`} className="flex items-center gap-2 pr-3">
@@ -393,7 +444,7 @@ function BillList({
                     <span className="ml-2 text-xs font-normal text-slate-500">anual</span>
                   )}
                 </span>
-                <StatusLine bill={bill} />
+                <StatusLine bill={bill} today={today} />
               </span>
               <span
                 className={`shrink-0 text-sm font-semibold tabular-nums ${paid ? "text-slate-500" : "text-slate-900"}`}
@@ -401,7 +452,7 @@ function BillList({
                 {formatCurrency(amount, currency)}
               </span>
             </button>
-            {canPay && (
+            {canPay && !scheduled && (
               <button
                 type="button"
                 onClick={() => onPay(bill)}
@@ -433,8 +484,10 @@ function PayForm({
   onDone: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
+  // só há pagamento registrado (para desfazer) quando foi marcado à mão
   const paid = bill.status === "paid";
-  const amount = paid ? (bill.paidAmount ?? bill.item.amount) : bill.item.amount;
+  const auto = bill.status === "auto_done";
+  const amount = paid || auto ? (bill.paidAmount ?? bill.item.amount) : bill.item.amount;
 
   async function submit(formData: FormData) {
     const result = await markPaidAction(bill.item.id, bill.month, formData);
@@ -481,7 +534,7 @@ function PayForm({
       </div>
       <FieldError>{error}</FieldError>
       <SubmitButton size="lg" className="w-full">
-        {paid ? "Salvar alterações" : "Marcar como paga"}
+        {paid || auto ? "Salvar alterações" : "Marcar como paga"}
       </SubmitButton>
       {paid && (
         <button
@@ -507,6 +560,7 @@ function FixedForm({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [frequency, setFrequency] = useState<FixedFrequency>(item?.frequency ?? "monthly");
+  const [wallet, setWallet] = useState<Wallet>(item?.wallet ?? "cash");
   const yearly = frequency === "yearly";
   const currentMonth = new Date().getMonth() + 1;
 
@@ -530,6 +584,7 @@ function FixedForm({
     <form action={submit} className="space-y-4">
       <input type="hidden" name="type" value={type} />
       <input type="hidden" name="frequency" value={frequency} />
+      <input type="hidden" name="wallet" value={wallet} />
       <div>
         <Label htmlFor="description">Nome</Label>
         <Input
@@ -596,6 +651,49 @@ function FixedForm({
           />
         </div>
       </div>
+      {type === "income" && (
+        <div>
+          <Label>Entra como</Label>
+          <div className="grid grid-cols-2 gap-2" role="group" aria-label="Dinheiro ou vale">
+            {(["cash", "benefit"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setWallet(value)}
+                aria-pressed={wallet === value}
+                className={`rounded-lg border py-2 text-sm font-medium transition-colors ${
+                  wallet === value
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {WALLET_LABELS[value]}
+              </button>
+            ))}
+          </div>
+          {wallet === "benefit" && (
+            <p className="mt-1 text-xs text-slate-500">
+              Vale-alimentação/refeição: entra no saldo total e também no saldo de VA/VR.
+            </p>
+          )}
+        </div>
+      )}
+      {type === "expense" && (
+        <label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3">
+          <input
+            type="checkbox"
+            name="auto_debit"
+            defaultChecked={item?.autoDebit ?? false}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <span>
+            <span className="block text-sm font-medium text-slate-900">Débito automático</span>
+            <span className="block text-xs text-slate-500">
+              Cai sozinha na data: não fica como &quot;a pagar&quot; nem gera aviso de vencimento.
+            </span>
+          </span>
+        </label>
+      )}
       {yearly && !item && (
         <p className="text-xs text-slate-500">
           Se o mês escolhido já passou este ano, a primeira cobrança aparece no ano que vem.

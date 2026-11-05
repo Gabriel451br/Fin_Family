@@ -11,7 +11,7 @@ import {
   updateFixedItem,
 } from "@/lib/data/fixed";
 import { markPaid, undoPaid } from "@/lib/data/payments";
-import type { FixedFrequency, FlowType } from "@/lib/finance";
+import type { FixedFrequency, FlowType, Wallet } from "@/lib/finance";
 
 function refresh() {
   revalidatePath("/fixed");
@@ -36,6 +36,11 @@ export async function saveFixedAction(
     const amount = parseMoney(String(formData.get("amount") ?? ""));
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Informe um valor maior que zero.");
 
+    // dinheiro/vale só faz sentido para receitas; débito automático só para despesas
+    const wallet: Wallet =
+      type === "income" && formData.get("wallet") === "benefit" ? "benefit" : "cash";
+    const autoDebit = type === "expense" && formData.get("auto_debit") === "on";
+
     const frequency = String(formData.get("frequency") ?? "monthly") as FixedFrequency;
     if (frequency !== "monthly" && frequency !== "yearly") throw new Error("Frequência inválida.");
 
@@ -50,7 +55,14 @@ export async function saveFixedAction(
     }
 
     if (id) {
-      await updateFixedItem(member.family_id, id, { description, amount, dayOfMonth, monthOfYear });
+      await updateFixedItem(member.family_id, id, {
+        description,
+        amount,
+        dayOfMonth,
+        monthOfYear,
+        wallet,
+        autoDebit,
+      });
     } else {
       await createFixedItem({
         familyId: member.family_id,
@@ -60,6 +72,8 @@ export async function saveFixedAction(
         frequency,
         monthOfYear,
         dayOfMonth,
+        wallet,
+        autoDebit,
         createdBy: user.id,
       });
     }
